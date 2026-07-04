@@ -32,4 +32,3 @@ jobs:
           git add "${{ github.event.inputs.filepath }}${{ github.event.inputs.filename }}"
           git commit -m "Add/Update: ${{ github.event.inputs.filename }} [automated via MC512 node]"
           git push
-
