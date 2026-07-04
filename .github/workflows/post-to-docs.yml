@@ -33,6 +33,5 @@ jobs:
           git commit -m "Add/Update: ${{ github.event.inputs.filename }} [automated via MC512 node]"
           git push
 
-One action only: paste the workflow into the editor. Do not commit yet.
-
-Then tell me “pasted.”
+One
+T
