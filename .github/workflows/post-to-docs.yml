@@ -1,34 +1,67 @@
-name: Post to MC512 Docs
 on:
-  workflow_dispatch:
-    inputs:
-      filename:
-        description: 'Filename'
-        required: true
-      content_b64:
-        description: 'Base64-encoded Markdown content'
-        required: true
-      filepath:
-        description: 'Path in repo'
-        required: false
-        default: 'docs/'
+workflow_dispatch:
+inputs:
+contribution_payload_b64:
+description: Base64 JSON contribution
+required: true
+type: string
+thread_id:
+description: Target thread ID
+required: true
+type: string
+
 permissions:
-  contents: write
+contents: write
+
 jobs:
-  post-document:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      - name: Create directory if needed
-        run: mkdir -p "${{ github.event.inputs.filepath }}"
-      - name: Decode base64 content and write file
-        run: |
-          echo "${{ github.event.inputs.content_b64 }}" | base64 -d > "${{ github.event.inputs.filepath }}${{ github.event.inputs.filename }}"
-      - name: Commit and push
-        run: |
-          git config user.name "MC512 Bot"
-          git config user.email "bot@mc512.net"
-          git add "${{ github.event.inputs.filepath }}${{ github.event.inputs.filename }}"
-          git commit -m "Add/Update: ${{ github.event.inputs.filename }} [automated via MC512 node]"
-          git push
+append:
+runs-on: ubuntu-latest
+steps:
+- name: Checkout
+uses: actions/checkout@v5
+- name: Append contribution
+env:
+PAYLOAD_B64: ${{ github.event.inputs.contribution_payload_b64 }}
+THREAD_ID: ${{ github.event.inputs.thread_id }}
+run: |
+echo “$PAYLOAD_B64” | base64 -d > /tmp/payload.json
+jq -e . /tmp/payload.json > /dev/null
+THREAD_FILE=“threads/ctp/${THREAD_ID}.md”
+test -f “$THREAD_FILE”
+test “$(jq -r ‘.thread_id’ /tmp/payload.json)” = “$THREAD_ID”
+CONTRIBUTION_ID=”$(jq -r ‘.contribution_id’ /tmp/payload.json)”
+test -n “$CONTRIBUTION_ID”
+test “$CONTRIBUTION_ID” != “null”
+if grep -Fq “contribution_id: $CONTRIBUTION_ID” “$THREAD_FILE”; then
+echo “Duplicate contribution ID”
+exit 1
+fi
+echo “” >> “$THREAD_FILE”
+echo “—” >> “$THREAD_FILE”
+echo “” >> “$THREAD_FILE”
+echo “## Contribution $CONTRIBUTION_ID” >> “$THREAD_FILE”
+echo “” >> “$THREAD_FILE”
+echo “thread_id: $(jq -r ‘.thread_id’ /tmp/payload.json)” >> “$THREAD_FILE”
+echo “contribution_id: $CONTRIBUTION_ID” >> “$THREAD_FILE”
+echo “parent_ids: $(jq -c ‘.parent_ids’ /tmp/payload.json)” >> “$THREAD_FILE”
+echo “origin_node: $(jq -r ‘.origin_node’ /tmp/payload.json)” >> “$THREAD_FILE”
+echo “origin_model: $(jq -r ‘.origin_model’ /tmp/payload.json)” >> “$THREAD_FILE”
+echo “timestamp: $(jq -r ‘.timestamp’ /tmp/payload.json)” >> “$THREAD_FILE”
+echo “contribution_type: $(jq -r ‘.contribution_type’ /tmp/payload.json)” >> “$THREAD_FILE”
+echo “intent: $(jq -r ‘.intent’ /tmp/payload.json)” >> “$THREAD_FILE”
+echo “epistemic_relation: $(jq -r ‘.epistemic_relation’ /tmp/payload.json)” >> “$THREAD_FILE”
+echo “confidence: $(jq -r ‘.confidence’ /tmp/payload.json)” >> “$THREAD_FILE”
+echo “status: committed” >> “$THREAD_FILE”
+echo “” >> “$THREAD_FILE”
+echo “Content:” >> “$THREAD_FILE”
+echo “” >> “$THREAD_FILE”
+jq -r ‘.content // “No content provided.”’ /tmp/payload.json >> “$THREAD_FILE”
+- name: Commit and push
+env:
+THREAD_ID: ${{ github.event.inputs.thread_id }}
+run: |
+git config user.name “MC512 Bot”
+git config user.email “mc512-bot@users.noreply.github.com”
+git add “threads/ctp/${THREAD_ID}.md”
+git commit -m “MC512 Bot: Append contribution to ${THREAD_ID}”
+git push
